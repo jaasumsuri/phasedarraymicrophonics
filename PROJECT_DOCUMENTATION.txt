@@ -1,0 +1,619 @@
+================================================================================
+PHASED ARRAY MICROPHONICS PROJECT - TECHNICAL DOCUMENTATION
+================================================================================
+
+PROJECT STRUCTURE OVERVIEW
+================================================================================
+
+This project implements a phased array microphone system for sound capture and 
+beamforming. The system records audio from multiple microphones, calculates 
+time delays based on microphone positions relative to a target sound source, 
+and combines the signals to enhance the target sound while reducing noise.
+
+--------------------------------------------------------------------------------
+MAIN PROJECT FOLDERS
+--------------------------------------------------------------------------------
+
+1. MICRECORD/
+   Purpose: Storage directory for all recorded audio data and generated 
+            visualizations.
+   
+   Structure:
+   - Each recording session is stored in a unique folder named with a code 
+     (e.g., 10321800, 10321801)
+   - Each recording folder contains:
+     * FIGS/ - Generated visualization files
+       - [CODE]_Diagram.png - Visual diagram of microphone array layout
+       - FinalSummation_[CODE].png - Waveform of the final combined audio
+       - multi_[CODE].png - Individual waveforms for each microphone
+       - Overlap_[CODE].png - Comparison of final summation vs. closest mic
+     * INDIV/ - Individual microphone recordings
+       - Mic1_[CODE].wav, Mic2_[CODE].wav, Mic3_[CODE].wav, etc.
+     * SUM/ - Final processed audio output
+       - FinalAudio_[CODE].wav - Combined and phased-aligned audio signal
+   - RecordingDatabase.txt - Database/log file for recording metadata
+
+2. PhasedArray_Software/
+   Purpose: Main application directory containing the GUI interface and all 
+            processing scripts.
+   
+   Structure:
+   - mainwindow.py - GUI application using PySide6 (Qt framework)
+   - form.ui / ui_form.py - UI design files
+   - pythonfiles/ - Core processing modules (see detailed descriptions below)
+   - requirements.txt - Python dependencies
+   - venv/ - Python virtual environment
+   - recorder.pyproject - Project configuration files
+
+3. README.md
+   Purpose: Project overview and basic information
+
+================================================================================
+PYTHONFILES DIRECTORY - DETAILED FILE DESCRIPTIONS
+================================================================================
+
+The pythonfiles/ directory contains the core algorithmic components of the 
+phased array system. Each module handles a specific aspect of the audio 
+processing pipeline.
+
+--------------------------------------------------------------------------------
+1. system.py (Main Processing Script)
+--------------------------------------------------------------------------------
+
+Purpose: The main orchestration script that coordinates all other modules to 
+         perform the complete phased array processing pipeline.
+
+Key Functions:
+- main(): Main entry point that processes command-line arguments and executes 
+          the full pipeline
+
+Processing Flow:
+1. Accepts system parameters via command-line arguments:
+   - SAD (System Adjacent Distance): Perpendicular distance from microphone 
+     array line to target sound source (in meters)
+   - SOD (System Opposite Distance): Distance along the array line from the 
+     leftmost microphone to where the perpendicular from target intersects 
+     the array (in meters)
+   - MIC_COUNT: Number of microphones in the array
+   - TOTALSPREAD: Total physical spread of the microphone array (in meters)
+   - TYPE: Sound source type (VOICE, TONE, BACKGROUND)
+   - NOISE: Noise type (VOICE, TONE, BACKGROUND, VOICE + BACKGROUND, NONE)
+
+2. Generates unique recording code using generateCode module
+
+3. Records audio from all microphones simultaneously
+
+4. Calculates distances from each microphone to the target sound source
+
+5. Computes time delays (in samples) needed to phase-align all microphone 
+   signals
+
+6. Applies delays by prepending zeros to each microphone signal (except the 
+   furthest microphone, which serves as the reference)
+
+7. Sums all phase-aligned signals to create the final beamformed output
+
+8. Generates visualization figures and saves the final audio file
+
+Dependencies: Uses all other modules (conversion, distanceCalc, figureCreate, 
+              wavCollection, generateCode)
+
+--------------------------------------------------------------------------------
+2. distanceCalc.py (Distance and Delay Calculations)
+--------------------------------------------------------------------------------
+
+Purpose: Contains the mathematical core of the phased array system - calculates 
+         physical distances and time delays for microphone signals.
+
+Key Constants:
+- SPEED_SOUND = 343 m/s (speed of sound in air at room temperature)
+
+Key Functions:
+
+calcDistance(TOTAL_SPREAD, MIC_COUNT, SOD, SAD)
+  Purpose: Calculates the straight-line (hypotenuse) distance from each 
+           microphone to the target sound source.
+  
+  Mathematical Process:
+  1. Calculates equidistant spacing scalar:
+     SCALAR = TOTAL_SPREAD / (MIC_COUNT - 1)
+     * This divides the total array length into (MIC_COUNT - 1) equal segments
+     * For example, 3 mics across 6 meters: SCALAR = 6/(3-1) = 3 meters apart
+  
+  2. Positions each microphone along the array line:
+     Mic_i_position = SCALAR × i  (where i ranges from 0 to MIC_COUNT-1)
+     * Mic 0 is always at position 0 (leftmost microphone)
+     * Mic 1 is at SCALAR meters from Mic 0
+     * Mic 2 is at 2×SCALAR meters from Mic 0
+     * And so on...
+  
+  3. Calculates the horizontal distance from each mic to the target:
+     * The target is located at (SOD, SAD) - SOD along the array line, 
+       SAD perpendicular to the array line
+     * Horizontal distance = |SOD - Mic_i_position|
+  
+  4. Uses Pythagorean theorem to find hypotenuse distance:
+     Distance_to_target[i] = √[(Horizontal_distance)² + SAD²]
+     Distance_to_target[i] = √[(|SOD - Mic_i_position|)² + SAD²]
+
+  Returns: NumPy array of distances (in meters) from each microphone to target
+
+calcSample(Distances_To_Target, FS, MAX_INDEX)
+  Purpose: Converts physical distance differences into sample delays needed 
+           for digital signal alignment.
+  
+  Mathematical Process:
+  1. For each microphone, calculates time delay:
+     Time_delay[i] = Distance_to_target[i] / SPEED_SOUND  (in seconds)
+  
+  2. Converts time delay to sample delay:
+     Sample_delay[i] = Time_delay[i] × FS  (FS = sample rate, typically 44100 Hz)
+     * Example: If delay is 0.001 seconds at 44100 Hz, that's ~44 samples
+  
+  3. Finds the furthest microphone (MAX_INDEX) - this will have the longest 
+     delay and serves as the reference
+  
+  4. Calculates relative delays needed for each microphone:
+     Total_delay_samples[i] = Sample_delay[MAX_INDEX] - Sample_delay[i]
+     * Microphones closer to the target need MORE leading zeros to catch up 
+       to the furthest microphone
+     * The furthest microphone gets 0 delay (reference point)
+
+  Returns: NumPy array of sample counts to prepend as zeros to each 
+           microphone signal
+
+HOW THE MATH WORKS FOR NUMBER OF MICROPHONES:
+------------------------------------------------
+
+The microphone array uses EQUIDISTANT SPACING, meaning microphones are evenly 
+distributed across the total spread.
+
+Mathematical Formula:
+  SCALAR = TOTAL_SPREAD / (MIC_COUNT - 1)
+
+Example Calculations:
+
+Example 1: 3 microphones, 6-meter spread
+  SCALAR = 6 / (3 - 1) = 6 / 2 = 3 meters
+  Mic 0 position: 0 × 3 = 0 meters (leftmost)
+  Mic 1 position: 1 × 3 = 3 meters
+  Mic 2 position: 2 × 3 = 6 meters (rightmost)
+  Total spacing: 3 meters between each pair
+
+Example 2: 4 microphones, 9-meter spread
+  SCALAR = 9 / (4 - 1) = 9 / 3 = 3 meters
+  Mic 0: 0 meters
+  Mic 1: 3 meters
+  Mic 2: 6 meters
+  Mic 3: 9 meters
+  Spacing: 3 meters uniform
+
+Example 3: 2 microphones, 5-meter spread
+  SCALAR = 5 / (2 - 1) = 5 / 1 = 5 meters
+  Mic 0: 0 meters
+  Mic 1: 5 meters
+  Spacing: 5 meters between them
+
+Why (MIC_COUNT - 1)?
+  If you have N microphones arranged in a line, there are (N-1) gaps between 
+  them. The first microphone is at position 0, and the last is at 
+  TOTAL_SPREAD. To space them evenly, you divide TOTAL_SPREAD by the number 
+  of gaps, not the number of microphones.
+
+Distance Calculation for Each Microphone:
+  Once microphone positions are known, the system calculates the straight-line 
+  distance from each microphone to the target using:
+  
+  Distance[i] = √[(|SOD - position[i]|)² + SAD²]
+  
+  Where:
+  - position[i] = SCALAR × i (position along array line)
+  - SOD = horizontal offset of target along array line
+  - SAD = perpendicular distance from array line to target
+
+Time Delay Calculation:
+  After calculating distances, time delays are computed:
+  
+  Time_delay[i] = Distance[i] / 343 m/s
+  
+  Sample_delay[i] = Time_delay[i] × Sample_Rate
+  
+  The microphone with the MAXIMUM distance (furthest from target) is used as 
+  the reference. All other microphones are delayed relative to this reference 
+  so that sounds from the target arrive at the same time in the final 
+  summation (constructive interference).
+
+--------------------------------------------------------------------------------
+3. conversion.py (Audio Format Conversion)
+--------------------------------------------------------------------------------
+
+Purpose: Handles conversion between WAV audio files and NumPy arrays for 
+         processing.
+
+Key Functions:
+
+convertWavCSV(file_path, FS)
+  Purpose: Reads a WAV file and converts it to a NumPy array for processing.
+  
+  Process:
+  1. Validates file extension is .wav
+  2. Reads WAV file using scipy.io.wavfile
+  3. Validates the file is mono (not stereo)
+  4. Validates sample rate matches expected FS parameter
+  5. Converts data to NumPy array format
+  
+  Returns: NumPy array of audio samples
+
+convertCSVWav(file_path, micData, FS)
+  Purpose: Writes a NumPy array to a WAV audio file.
+  
+  Process:
+  1. Converts NumPy array to Pandas DataFrame
+  2. Converts data to int16 format (16-bit audio)
+  3. Writes to WAV file using scipy.io.wavfile
+  
+  Returns: None (saves file to disk)
+
+Note: Despite the function names containing "CSV", these functions actually 
+      work with NumPy arrays, not CSV files. The naming convention reflects 
+      the historical development of the project.
+
+--------------------------------------------------------------------------------
+4. figureCreate.py (Visualization Generation)
+--------------------------------------------------------------------------------
+
+Purpose: Creates visualization plots to help analyze the microphone array 
+         system and audio signals.
+
+Key Functions:
+
+multiFigure(mic_signal_cells, sysInfo)
+  Purpose: Creates a multi-panel plot showing individual waveforms from each 
+           microphone.
+  
+  Output: Saves PNG file showing all microphone signals as separate subplots 
+          stacked vertically, each with amplitude vs. sample number.
+
+summationFigure(micSummationArray, sysInfo)
+  Purpose: Creates a plot of the final combined/beamformed audio signal.
+  
+  Output: Single-panel PNG showing the waveform of the summed, phase-aligned 
+          signals.
+
+overlappingFigure(micSummationArray, closestArray, sysInfo)
+  Purpose: Creates a comparison plot overlaying the final summation with the 
+           signal from the closest microphone.
+  
+  Output: PNG showing both waveforms on the same plot for comparison.
+  
+  Note: This helps visualize the improvement achieved through beamforming - 
+        the summation should show enhanced signal compared to a single 
+        microphone.
+
+generateDiagram(sysInfo)
+  Purpose: Creates a visual diagram of the microphone array geometry.
+  
+  Output: PNG showing:
+  - Microphone positions as scatter points along the array line
+  - Target sound source position
+  - Total spread distance
+  - SAD and SOD values labeled
+  
+  This diagram helps visualize the physical setup of the array relative to 
+  the target.
+
+Visualization Style:
+- Background color: Beige (#F5F5DC)
+- Grid lines: Gray dashed lines
+- Signal color: Brown
+- All figures use matplotlib for generation
+
+--------------------------------------------------------------------------------
+5. wavCollection.py (Audio Recording)
+--------------------------------------------------------------------------------
+
+Purpose: Handles real-time audio recording from multiple microphones using 
+         the sounddevice library.
+
+Key Features:
+- Interactive device selection (user chooses input/output devices)
+- Multi-channel recording support (records from multiple microphones 
+  simultaneously)
+- Real-time playback during recording (optional)
+- Threading for concurrent recording and playback
+
+Key Functions:
+
+choose_input_device()
+  Purpose: Lists available audio input devices and allows user to select one.
+  
+  Returns: (device_index, mic_count) tuple
+
+choose_output_device()
+  Purpose: Lists available audio output devices for playback.
+  
+  Returns: device_index
+
+choose_playback_option(mic_count)
+  Purpose: Allows user to select which microphone channel to monitor during 
+           recording, or mix all channels.
+  
+  Returns: Selected option index
+
+audio_callback(indata, frames, time, status)
+  Purpose: Callback function that processes audio chunks in real-time during 
+           recording.
+  
+  Process: Puts audio data into queues for both recording storage and 
+           real-time playback
+
+playback_thread(output_device_index, mic_count, playback_choice)
+  Purpose: Thread function that handles real-time audio playback while 
+           recording.
+  
+  Process: Continuously reads from playback queue and outputs audio to 
+           selected output device
+
+record_audio()
+  Purpose: Main recording function that orchestrates the entire recording 
+           process.
+  
+  Process:
+  1. User selects input/output devices
+  2. User chooses playback monitoring option
+  3. Starts playback thread
+  4. Records audio for configured duration (10 seconds default)
+  5. Collects all audio chunks
+  6. Saves individual microphone channels as separate WAV files
+  7. Optionally saves combined multi-channel file
+
+Configuration Constants:
+- SAMRATE = 44100 Hz (standard CD-quality sample rate)
+- DURATION = 10 seconds (recording length)
+- CODE = "test_recording" (default filename prefix)
+
+Output Format:
+- Files saved as: Mic1_[CODE].wav, Mic2_[CODE].wav, etc.
+- Each file is mono (single channel) WAV format
+- int16 bit depth
+
+Note: This module is designed for interactive use. The system.py module may 
+      reference a recordAudio() function, but the current implementation uses 
+      record_audio() as the main entry point.
+
+--------------------------------------------------------------------------------
+6. generateCode.py (Recording Code Generation)
+--------------------------------------------------------------------------------
+
+Purpose: Generates unique identification codes for each recording session 
+         based on system parameters.
+
+Key Functions:
+
+recNum(ID)
+  Purpose: Counts how many previous recordings exist with the same base ID.
+  
+  Process:
+  1. Scans MICRECORD directory for existing folders
+  2. Checks how many match the base ID pattern (last 4 digits)
+  3. Returns count + 1 (for next recording number)
+  
+  Returns: Integer representing recording sequence number (0 if no matches)
+
+generate(MIC_COUNT, TYPE, NOISE)
+  Purpose: Generates a unique code string that encodes recording parameters.
+  
+  Code Format: [RECORDNUM][MIC_COUNT][SOURCES][TYPENUM][NOISENUM]
+  
+  Encoding:
+  - RECORDNUM: Sequential recording number (from recNum function)
+  - MIC_COUNT: Number of microphones (direct parameter)
+  - SOURCES: Number of sound sources (1 base + noise sources if present)
+  - TYPENUM: Sound type code
+    * "1" = TONE
+    * "3" = VOICE
+    * "5" = BACKGROUND
+  - NOISENUM: Noise type code
+    * "0" = NONE
+    * "1" = TONE
+    * "3" = VOICE
+    * "5" = BACKGROUND
+    * "8" = VOICE + BACKGROUND
+  
+  Process:
+  1. Determines TYPE number code
+  2. Determines NOISE number code and counts additional sources
+  3. Creates base ID string
+  4. Gets recording number using recNum
+  5. Creates directory structure if needed (FIGS/, INDIV/, SUM/)
+  6. Returns full code string
+  
+  Returns: Unique recording code string (e.g., "010312803")
+
+Directory Creation:
+  If the recording directory doesn't exist, this function creates:
+  - Main directory: ../MICRECORD/[CODE]/
+  - Subdirectories: FIGS/, INDIV/, SUM/
+
+Example Codes:
+  - "010312803": Recording 0, 1 mic, 3 sources, type=VOICE(3), noise=VOICE(3)
+  - "110301801": Recording 1, 1 mic, 3 sources, type=VOICE(3), noise=TONE(1)
+  - "23518508": Recording 2, 3 mics, 5 sources, type=BACKGROUND(5), 
+                noise=VOICE+BACKGROUND(8)
+
+--------------------------------------------------------------------------------
+7. simulate_mic.py (Neural Network Simulation Model)
+--------------------------------------------------------------------------------
+
+Purpose: Implements a deep learning model for simulating microphone array 
+         responses. This is an experimental/research component for predicting 
+         how microphones would respond to sound sources at different positions.
+
+Key Components:
+
+MicSimNet Class (PyTorch Neural Network)
+  Architecture:
+  - Audio Tower: Processes audio spectrograms using 2D convolutions
+    * Input: num_input_mics channels
+    * Conv2d: num_input_mics → 8 channels → 16 channels
+    * Uses ReLU activation
+  
+  - Position Tower: Processes 3D position information
+    * Input: 3 features (x, y, z coordinates)
+    * Linear layers: 3 → 16 → 16 features
+    * Uses ReLU activation
+  
+  - Decoder: Combines audio and position features to generate prediction
+    * Concatenates 16 audio features + 16 position features = 32 features
+    * ConvTranspose2d: 32 → 16 → 1 channel
+    * Output: Predicted microphone signal spectrogram
+  
+  Purpose: Takes a source audio signal and its 3D position, then predicts 
+           what multiple microphones would record from that source.
+
+forward(input_spectrograms, target_position)
+  Input:
+  - input_spectrograms: Tensor of shape (batch, num_input_mics, freq_bins, 
+    time_frames) - spectrograms from multiple microphones
+  - target_position: Tensor of shape (batch, 3) - x, y, z position of sound 
+    source
+  
+  Output: Predicted spectrogram of shape (batch, 1, freq_bins, time_frames)
+
+run_sanity_check()
+  Purpose: Test function to verify the model architecture works correctly.
+  
+  Process:
+  1. Creates model instance with 3 input microphones
+  2. Generates fake test data
+  3. Runs forward pass
+  4. Verifies output shape is correct
+  
+  Test Configuration:
+  - num_input_mics = 3
+  - batch_size = 4
+  - freq_bins = 513 (typical spectrogram frequency resolution)
+  - time_frames = 100
+
+Use Case: This model is designed for research purposes to simulate microphone 
+          array behavior without requiring physical recordings, or to 
+          augment training data for machine learning applications.
+
+Technology Stack: PyTorch, torchaudio
+
+--------------------------------------------------------------------------------
+8. tempCodeRunnerFile.py
+--------------------------------------------------------------------------------
+
+Purpose: Temporary file created by the VS Code Code Runner extension or 
+         similar development tools. Likely contains temporary code snippets 
+         or test code. Not part of the core application functionality.
+
+================================================================================
+ADDITIONAL FILES
+================================================================================
+
+mainwindow.py (GUI Application)
+--------------------------------------------------------------------------------
+
+Purpose: PySide6/Qt-based graphical user interface for the phased array system.
+
+Key Features:
+- Input fields for system parameters (SAD, SOD, MIC_COUNT, TOTALSPREAD)
+- Dropdown menus for TYPE and NOISE selection
+- File management (import/delete Python files)
+- Console log for user feedback
+- Record button to launch audio recording
+- Save settings button to store user inputs
+
+Key Methods:
+- save_settings(): Captures user input values from GUI fields
+- record_live(): Launches the wavCollection.py script for recording
+- import_py_file(): Allows importing custom Python scripts
+- delete_selected_file(): Removes files from the pythonfiles directory
+
+UI Framework: PySide6 (Qt for Python)
+
+================================================================================
+PROCESSING PIPELINE SUMMARY
+================================================================================
+
+Complete workflow from user input to final output:
+
+1. USER INPUT (via GUI or command line):
+   - SAD, SOD, MIC_COUNT, TOTALSPREAD, TYPE, NOISE
+
+2. CODE GENERATION:
+   - generateCode.generate() creates unique recording identifier
+
+3. AUDIO RECORDING:
+   - wavCollection.record_audio() captures audio from all microphones
+   - Individual WAV files saved for each microphone
+
+4. DISTANCE CALCULATION:
+   - distanceCalc.calcDistance() computes physical distances from each mic 
+     to target
+   - Formula: √[(|SOD - SCALAR×i|)² + SAD²]
+   - SCALAR = TOTALSPREAD / (MIC_COUNT - 1)
+
+5. DELAY CALCULATION:
+   - distanceCalc.calcSample() converts distances to sample delays
+   - Finds furthest microphone as reference
+   - Calculates relative delays for all other microphones
+
+6. AUDIO PROCESSING:
+   - conversion.convertWavCSV() loads each microphone WAV file
+   - Prepends zeros to each signal (except reference mic) to apply delays
+   - Pads all signals to same length
+
+7. BEAMFORMING:
+   - Sums all phase-aligned microphone signals
+   - Constructive interference enhances target sound
+   - Destructive interference reduces noise from other directions
+
+8. VISUALIZATION:
+   - figureCreate generates diagrams and waveform plots
+   - Saves PNG files in FIGS/ directory
+
+9. OUTPUT:
+   - conversion.convertCSVWav() saves final beamformed audio
+   - File saved as FinalAudio_[CODE].wav
+
+================================================================================
+KEY MATHEMATICAL CONCEPTS
+================================================================================
+
+EQUIDISTANT MICROPHONE SPACING:
+  Microphones are evenly distributed across the total array spread.
+  
+  SCALAR = TOTALSPREAD / (MIC_COUNT - 1)
+  
+  Position[i] = SCALAR × i, where i = 0, 1, 2, ..., MIC_COUNT-1
+
+PYTHAGOREAN DISTANCE CALCULATION:
+  For a target at (SOD, SAD) and microphone at (position[i], 0):
+  
+  Distance[i] = √[(SOD - position[i])² + SAD²]
+
+TIME DELAY CALCULATION:
+  Sound travels at 343 m/s in air.
+  
+  Time_delay[i] = Distance[i] / 343
+  
+  Sample_delay[i] = Time_delay[i] × Sample_Rate
+
+PHASE ALIGNMENT:
+  All microphone signals are delayed relative to the furthest microphone so 
+  that sound from the target arrives at the same time in all signals. When 
+  summed, this creates constructive interference for the target direction.
+
+BEAMFORMING PRINCIPLE:
+  By time-aligning signals from a specific direction and summing them, the 
+  system creates a "beam" of enhanced sensitivity pointing toward that 
+  direction. Sounds from other directions are not aligned and tend to cancel 
+  out when summed.
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
+
