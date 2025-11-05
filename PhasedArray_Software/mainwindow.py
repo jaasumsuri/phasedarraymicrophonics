@@ -1,3 +1,13 @@
+#######################################
+#
+#      Phased Array Microphonics
+#        GUI Main Window
+#
+#       Author : Joe Do
+#       Date : 11/4/2025
+#
+#######################################
+
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListWidgetItem, QMenu, QToolButton
 from PySide6.QtGui import QAction
 import sys, subprocess, shutil, os

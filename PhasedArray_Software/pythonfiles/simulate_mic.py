@@ -5,8 +5,8 @@
 # This file is meant for the the model 
 # that will simulate the microphone array system
 #
-#       Author : Neil Nainani
-#       Date : 09/29/2025
+#       Author : Neil Nainani, Joe Do
+#       Date : 11/4/2025
 #
 #######################################
 

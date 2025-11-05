@@ -5,7 +5,7 @@
 # Combines all other Scripts to output summation 
 # file for Phased Alteration and Graphs
 #
-#   Authors : Kyle Gruen, Ibrahim Shabini
+#   Authors : Kyle Gruen, Ibrahim Shabini, Joe Do
 #           Date : 02/27/2024
 #
 #######################################
@@ -16,6 +16,8 @@ import distanceCalc as dc
 import figureCreate as fc
 import wavCollection as wc
 import generateCode as gc
+from dataloader import curr_session_mics
+from simulate_mic import MicSimNet
 
 # Import Python Libraries #
 import numpy as np
@@ -82,7 +84,10 @@ def main():
     for mic in FORLOOPARR: 
         file_path = "../MICRECORD/" + CODE + "/INDIV/Mic" + str(mic + 1) + "_" + CODE + ".wav" 
         mic_Signal_Cells[mic] = con.convertWavCSV(file_path, FS)
-        
+    
+    # Load current session's microphone data and convert to spectrograms
+    specs, sr, mic_files = curr_session_mics(CODE)
+
     # Generate Figure Displaying all Microphone Waves on MatPlot #
     fc.multiFigure(mic_Signal_Cells, recordingInformation)
 
