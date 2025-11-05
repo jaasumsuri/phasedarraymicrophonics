@@ -13,6 +13,7 @@ from PySide6.QtGui import QAction
 import sys, subprocess, shutil, os
 from ui_form import Ui_MainWindow
 from pythonfiles.ai_mic_dialog import AIMicConfigDialog
+import json
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -253,6 +254,11 @@ class MainWindow(QMainWindow):
             self.type,
             self.noise
         ]
+        
+        # Add AI config as 7th argument (JSON string)
+        # Serialize AI config to JSON string for passing as command-line argument
+        ai_config_json = json.dumps(self.ai_mic_config)
+        args.append(ai_config_json)
 
         # Log and verify the command
         command = [sys.executable, script_path] + args
