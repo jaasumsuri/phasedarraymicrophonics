@@ -133,7 +133,7 @@
     <widget class="QLabel" name="label_4">
      <property name="geometry">
       <rect>
-       <x>490</x>
+       <x>500</x>
        <y>50</y>
        <width>251</width>
        <height>31</height>
@@ -158,7 +158,7 @@
     <widget class="QLabel" name="label_5">
      <property name="geometry">
       <rect>
-       <x>490</x>
+       <x>500</x>
        <y>250</y>
        <width>251</width>
        <height>31</height>
@@ -183,7 +183,7 @@
     <widget class="QLineEdit" name="micCount">
      <property name="geometry">
       <rect>
-       <x>490</x>
+       <x>500</x>
        <y>290</y>
        <width>251</width>
        <height>31</height>
@@ -225,26 +225,10 @@
       </rect>
      </property>
     </widget>
-    <widget class="QPushButton" name="saveButton">
-     <property name="geometry">
-      <rect>
-       <x>320</x>
-       <y>280</y>
-       <width>121</width>
-       <height>51</height>
-      </rect>
-     </property>
-     <property name="acceptDrops">
-      <bool>false</bool>
-     </property>
-     <property name="text">
-      <string>Save</string>
-     </property>
-    </widget>
     <widget class="QLabel" name="label_7">
      <property name="geometry">
       <rect>
-       <x>490</x>
+       <x>500</x>
        <y>150</y>
        <width>251</width>
        <height>31</height>
@@ -269,7 +253,7 @@
     <widget class="QToolButton" name="typeButton">
      <property name="geometry">
       <rect>
-       <x>490</x>
+       <x>500</x>
        <y>90</y>
        <width>251</width>
        <height>31</height>
@@ -282,7 +266,7 @@
     <widget class="QToolButton" name="noiseButton">
      <property name="geometry">
       <rect>
-       <x>490</x>
+       <x>500</x>
        <y>190</y>
        <width>251</width>
        <height>31</height>
@@ -290,6 +274,22 @@
      </property>
      <property name="text">
       <string>...</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="saveButton">
+     <property name="geometry">
+      <rect>
+       <x>320</x>
+       <y>280</y>
+       <width>151</width>
+       <height>61</height>
+      </rect>
+     </property>
+     <property name="acceptDrops">
+      <bool>false</bool>
+     </property>
+     <property name="text">
+      <string>Save</string>
      </property>
     </widget>
    </widget>
@@ -315,9 +315,9 @@
    <widget class="QToolButton" name="refreshList">
     <property name="geometry">
      <rect>
-      <x>270</x>
+      <x>300</x>
       <y>390</y>
-      <width>111</width>
+      <width>101</width>
       <height>41</height>
      </rect>
     </property>
@@ -328,9 +328,9 @@
    <widget class="QToolButton" name="deleteFile">
     <property name="geometry">
      <rect>
-      <x>140</x>
+      <x>160</x>
       <y>390</y>
-      <width>111</width>
+      <width>101</width>
       <height>41</height>
      </rect>
     </property>
@@ -378,7 +378,15 @@
     <addaction name="actionMenu"/>
     <addaction name="actionClear"/>
    </widget>
+   <widget class="QMenu" name="menuAI_Microphone_Configurations">
+    <property name="title">
+     <string>AI Microphone Configurations</string>
+    </property>
+    <addaction name="actionEnable_Phantom_Mics"/>
+    <addaction name="actionAI_Microphone_Configurations"/>
+   </widget>
    <addaction name="menuRecord_Application"/>
+   <addaction name="menuAI_Microphone_Configurations"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionMenu">
@@ -394,6 +402,16 @@
   <action name="actionClear">
    <property name="text">
     <string>Clear Console</string>
+   </property>
+  </action>
+  <action name="actionEnable_Phantom_Mics">
+   <property name="text">
+    <string>Enable &quot;Phantom&quot; Mics</string>
+   </property>
+  </action>
+  <action name="actionAI_Microphone_Configurations">
+   <property name="text">
+    <string>AI Microphone Configurations</string>
    </property>
   </action>
  </widget>

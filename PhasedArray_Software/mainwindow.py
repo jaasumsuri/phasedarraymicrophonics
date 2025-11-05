@@ -8,10 +8,11 @@
 #
 #######################################
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListWidgetItem, QMenu, QToolButton
+from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListWidgetItem, QMenu, QToolButton, QDialog
 from PySide6.QtGui import QAction
 import sys, subprocess, shutil, os
 from ui_form import Ui_MainWindow
+from pythonfiles.ai_mic_dialog import AIMicConfigDialog
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -26,6 +27,14 @@ class MainWindow(QMainWindow):
         self.total_spread = None
         self.type = "VOICE"
         self.noise = "VOICE"
+        
+        # AI Mic configuration state
+        self.ai_mic_enabled = False
+        self.ai_mic_config = {
+            'enabled': False,
+            'num_phantom_mics': 0,
+            'positions': []
+        }
 
         # Connections
         self.ui.actionMenu.triggered.connect(self.import_py_file)
@@ -34,6 +43,12 @@ class MainWindow(QMainWindow):
         self.ui.saveButton.clicked.connect(self.save_settings)
         self.ui.deleteFile.clicked.connect(self.delete_selected_file)
         self.ui.recordButton.clicked.connect(self.record_live)
+        
+        # AI Mic menu connections
+        self.ui.actionEnable_Phantom_Mics.triggered.connect(self.toggle_ai_mic_enable)
+        self.ui.actionEnable_Phantom_Mics.setCheckable(True)
+        self.ui.actionAI_Microphone_Configurations.triggered.connect(self.open_ai_mic_config)
+        self.update_ai_mic_menu_state()
 
         # Initialize dropdowns for type and noise
         self.init_type_dropdown()
@@ -151,6 +166,62 @@ class MainWindow(QMainWindow):
             subprocess.Popen([sys.executable, script_path], shell=False)
         except Exception as e:
             self.ui.consoleLog.append(f"Error launching recording: {e}")
+    
+    def toggle_ai_mic_enable(self):
+        """Toggle AI phantom mic enable/disable state"""
+        self.ai_mic_enabled = not self.ai_mic_enabled
+        self.ui.actionEnable_Phantom_Mics.setChecked(self.ai_mic_enabled)
+        self.ai_mic_config['enabled'] = self.ai_mic_enabled
+        self.update_ai_mic_menu_state()
+        
+        if self.ai_mic_enabled:
+            self.ui.consoleLog.append("AI Phantom Microphones: ENABLED")
+        else:
+            self.ui.consoleLog.append("AI Phantom Microphones: DISABLED")
+            # Reset config when disabled
+            self.ai_mic_config = {
+                'enabled': False,
+                'num_phantom_mics': 0,
+                'positions': []
+            }
+    
+    def update_ai_mic_menu_state(self):
+        """Update the menu item states based on enable/disable"""
+        # Gray out the configuration menu item when disabled
+        self.ui.actionAI_Microphone_Configurations.setEnabled(self.ai_mic_enabled)
+        
+        # Update checkmark on enable action
+        self.ui.actionEnable_Phantom_Mics.setChecked(self.ai_mic_enabled)
+    
+    def open_ai_mic_config(self):
+        """Open the AI microphone configuration dialog"""
+        if not self.ai_mic_enabled:
+            self.ui.consoleLog.append("Error: Please enable AI Phantom Mics first.")
+            return
+        
+        dialog = AIMicConfigDialog(self)
+        # Ensure the config reflects the current enabled state
+        self.ai_mic_config['enabled'] = self.ai_mic_enabled
+        # Load current configuration
+        dialog.set_configuration(self.ai_mic_config)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Save configuration
+            self.ai_mic_config = dialog.get_configuration()
+            self.ai_mic_enabled = self.ai_mic_config['enabled']
+            
+            # Update menu state
+            self.update_ai_mic_menu_state()
+            
+            # Log configuration
+            if self.ai_mic_config['enabled']:
+                num_mics = self.ai_mic_config['num_phantom_mics']
+                positions = self.ai_mic_config['positions']
+                self.ui.consoleLog.append(f"AI Mic Config Saved:")
+                self.ui.consoleLog.append(f"  Number of Phantom Mics: {num_mics}")
+                for i, pos in enumerate(positions):
+                    x, y, z = pos
+                    self.ui.consoleLog.append(f"  Phantom Mic #{i+1}: X={x}, Y={y}, Z={z}")
 
     # Run the selected script with user inputs 
     # THIS IS CURRENTLY NOT BEING USED SINCE RECORD USES wavCollection.py
